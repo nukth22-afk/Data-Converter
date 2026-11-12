@@ -1,0 +1,6 @@
+{
+  "name": "Data Mapper & Filter Pro",
+  "description": "ระบบแปลงและกรองข้อมูลงานดิบอัตโนมัติ คำนวณ Slot โซน แมปทีม และส่งออก Excel",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

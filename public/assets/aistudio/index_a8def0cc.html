@@ -1,0 +1,1138 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ระบบแปลงและกรองข้อมูลงานดิบ (Data Mapper & Filter Pro)</title>
+    <!-- Favicon แว่นขยาย -->
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%234F46E5' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'><circle cx='11' cy='11' r='8'/><line x1='21' y1='21' x2='16.65' y2='16.65'/></svg>">
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- SheetJS for Excel Read & Export -->
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@0.469.0/dist/umd/lucide.min.js"></script>
+    <!-- Google Fonts (Prompt) -->
+    <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Prompt', sans-serif; }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-800 min-h-screen pb-12">
+
+    <!-- Header -->
+    <header class="bg-indigo-600 text-white shadow-md">
+        <div class="max-w-7xl mx-auto px-4 py-4 flex flex-wrap justify-between items-center gap-4">
+            <div class="flex items-center space-x-3">
+                <i data-lucide="database" class="w-8 h-8"></i>
+                <div>
+                    <h1 class="text-xl font-bold leading-tight">ระบบแปลงและกรองข้อมูลงานดิบอัตโนมัติ</h1>
+                    <p class="text-indigo-200 text-xs">คลิกดูข้อมูลที่การ์ดสถิติได้ | รองรับ Status Prepare/New/Scheduled | แมปทีม | รองรับที่อยู่ภาษาอังกฤษและรหัสไปรษณีย์ครบถ้วน</p>
+                </div>
+            </div>
+            <button onclick="openSettingsModal()" class="bg-indigo-500 hover:bg-indigo-400 text-white text-xs px-3 py-2 rounded-lg transition flex items-center gap-1 shadow">
+                <i data-lucide="settings" class="w-4 h-4"></i> จัดการทีม & Title (<span id="configCountBadge">0</span>)
+            </button>
+        </div>
+    </header>
+
+    <main class="max-w-7xl mx-auto px-4 mt-6 space-y-6">
+
+        <!-- Stats Overview Cards -->
+        <section class="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div onclick="filterByCard('passed')" class="bg-white p-4 rounded-xl border-2 border-transparent hover:border-indigo-500 shadow-sm flex items-center space-x-4 cursor-pointer transition transform hover:-translate-y-0.5">
+                <div class="p-3 bg-indigo-50 text-indigo-600 rounded-lg">
+                    <i data-lucide="list" class="w-6 h-6"></i>
+                </div>
+                <div>
+                    <div class="text-xs text-slate-500">ผ่านการกรอง (คลิกดู)</div>
+                    <div id="statTotal" class="text-xl font-bold text-slate-800">0</div>
+                </div>
+            </div>
+            <div onclick="filterByCard('filteredOut')" class="bg-white p-4 rounded-xl border-2 border-transparent hover:border-red-500 shadow-sm flex items-center space-x-4 cursor-pointer transition transform hover:-translate-y-0.5">
+                <div class="p-3 bg-red-50 text-red-600 rounded-lg">
+                    <i data-lucide="filter-x" class="w-6 h-6"></i>
+                </div>
+                <div>
+                    <div class="text-xs text-slate-500">ถูกคัดกรองออก (คลิกดู)</div>
+                    <div id="statFilteredOut" class="text-xl font-bold text-slate-800">0</div>
+                </div>
+            </div>
+            <div onclick="filterByCard('mapped')" class="bg-white p-4 rounded-xl border-2 border-transparent hover:border-emerald-500 shadow-sm flex items-center space-x-4 cursor-pointer transition transform hover:-translate-y-0.5">
+                <div class="p-3 bg-emerald-50 text-emerald-600 rounded-lg">
+                    <i data-lucide="map-pin" class="w-6 h-6"></i>
+                </div>
+                <div>
+                    <div class="text-xs text-slate-500">แมปโซนสำเร็จ (คลิกดู)</div>
+                    <div id="statZoneMapped" class="text-xl font-bold text-slate-800">0</div>
+                </div>
+            </div>
+            <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex items-center space-x-4">
+                <div class="p-3 bg-blue-50 text-blue-600 rounded-lg">
+                    <i data-lucide="check-circle-2" class="w-6 h-6"></i>
+                </div>
+                <div>
+                    <div class="text-xs text-slate-500">สถานะระบบ</div>
+                    <div class="text-sm font-semibold text-emerald-600">พร้อมใช้งาน</div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Import Section -->
+        <section class="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+            <div class="flex items-center justify-between mb-4">
+                <label class="font-semibold text-slate-700 flex items-center gap-2">
+                    <i data-lucide="file-spreadsheet" class="w-5 h-5 text-indigo-600"></i> อัปโหลดไฟล์ข้อมูลดิบ (Excel / CSV)
+                </label>
+                <span class="text-xs text-slate-400">รองรับไฟล์ .xlsx, .xls, .csv</span>
+            </div>
+
+            <div id="dropZone" class="border-2 border-dashed border-slate-300 rounded-xl p-8 text-center hover:border-indigo-500 transition cursor-pointer bg-slate-50 relative">
+                <input type="file" id="excelFile" accept=".xlsx, .xls, .csv" class="absolute inset-0 opacity-0 cursor-pointer w-full h-full" onchange="handleFileSelect(event)">
+                <div class="flex flex-col items-center space-y-2 pointer-events-none">
+                    <div class="p-3 bg-indigo-50 text-indigo-600 rounded-full">
+                        <i data-lucide="upload-cloud" class="w-8 h-8"></i>
+                    </div>
+                    <div class="text-sm font-medium text-slate-700">คลิกเพื่อเลือกไฟล์ หรือลากไฟล์มาวางที่นี่</div>
+                    <div class="text-xs text-slate-400">ระบบจะกรองและประมวลผลข้อมูลให้อัตโนมัติ</div>
+                </div>
+            </div>
+
+            <div id="fileNameDisplay" class="hidden mt-3 p-3 bg-indigo-50 border border-indigo-100 rounded-lg text-sm text-indigo-700 flex items-center justify-between">
+                <div class="flex items-center gap-2 truncate">
+                    <i data-lucide="file-check" class="w-4 h-4 text-indigo-600 shrink-0"></i>
+                    <span id="selectedFileName" class="font-medium truncate"></span>
+                </div>
+                <button onclick="clearData()" class="text-slate-400 hover:text-red-500 text-xs transition">ล้างไฟล์</button>
+            </div>
+        </section>
+
+        <!-- Stats & Controls Section -->
+        <section id="resultControls" class="hidden space-y-4">
+            <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-wrap gap-4 items-center justify-between">
+                <div class="flex flex-wrap items-center gap-3 flex-1 min-w-[280px]">
+                    <div class="relative flex-1 max-w-xs">
+                        <i data-lucide="search" class="w-4 h-4 absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400"></i>
+                        <input type="text" id="searchInput" oninput="renderTable()" placeholder="ค้นหาข้อมูลทุกคอลัมน์..." 
+                            class="w-full pl-9 pr-3 py-1.5 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500">
+                    </div>
+                    <select id="zoneFilter" onchange="renderTable()" class="py-1.5 px-3 border border-slate-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-indigo-500">
+                        <option value="">-- ทุกโซน --</option>
+                    </select>
+                    <button onclick="resetCardFilter()" id="resetFilterBtn" class="hidden px-3 py-1.5 bg-amber-100 hover:bg-amber-200 text-amber-800 rounded-lg text-xs font-semibold transition flex items-center gap-1">
+                        <i data-lucide="rotate-ccw" class="w-3.5 h-3.5"></i> ล้างตัวกรองการ์ด (แสดงทั้งหมด)
+                    </button>
+                </div>
+
+                <div class="flex items-center gap-2">
+                    <button onclick="copyTableToClipboard()" class="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-sm font-medium transition flex items-center gap-1">
+                        <i data-lucide="copy" class="w-4 h-4"></i> คัดลอกตาราง
+                    </button>
+                    <button onclick="exportToExcel()" class="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-sm font-medium shadow-sm transition flex items-center gap-1">
+                        <i data-lucide="download" class="w-4 h-4"></i> ส่งออกเป็น Excel (.xlsx)
+                    </button>
+                </div>
+            </div>
+        </section>
+
+        <!-- Table Display -->
+        <section id="tableContainer" class="hidden bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+            <div class="px-4 py-2 bg-slate-50 border-b border-slate-200 text-xs text-slate-500 flex justify-between items-center">
+                <span id="activeViewIndicator">กำลังแสดง: ข้อมูลที่ผ่านการกรอง</span>
+                <span id="tableCountInfo">แสดง 0 รายการ</span>
+            </div>
+            <div class="overflow-x-auto max-h-[600px]">
+                <table class="w-full text-left text-sm border-collapse">
+                    <thead class="bg-slate-100 text-slate-700 font-semibold sticky top-0 border-b border-slate-200 z-10">
+                        <tr id="tableHeaderRow"></tr>
+                    </thead>
+                    <tbody id="tableBody" class="divide-y divide-slate-200"></tbody>
+                </table>
+            </div>
+            <div id="emptySearch" class="hidden py-12 text-center text-slate-400">
+                <i data-lucide="search-x" class="w-10 h-10 mx-auto mb-2 stroke-1"></i>
+                <p>ไม่พบข้อมูลที่ตรงกับการค้นหา</p>
+            </div>
+        </section>
+    </main>
+
+    <!-- Modal for Managing Settings -->
+    <div id="settingsModal" class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center hidden">
+        <div class="bg-white rounded-2xl max-w-3xl w-full mx-4 overflow-hidden shadow-2xl flex flex-col max-h-[85vh]">
+            <div class="bg-indigo-600 text-white px-6 py-4 flex justify-between items-center">
+                <h3 class="font-bold text-lg flex items-center gap-2"><i data-lucide="settings" class="w-5 h-5"></i> จัดการข้อมูลทีม (Contract Team) และ Title</h3>
+                <button onclick="closeSettingsModal()" class="text-indigo-200 hover:text-white"><i data-lucide="x" class="w-6 h-6"></i></button>
+            </div>
+            <div class="p-6 space-y-6 flex-1 overflow-y-auto text-xs">
+                <div>
+                    <h4 class="font-bold text-slate-700 text-sm mb-2 flex items-center gap-1"><i data-lucide="users" class="w-4 h-4 text-indigo-600"></i> จัดการ Mapping ชื่อทีม Contract Team ➔ ชื่อทีมย่อ</h4>
+                    <div class="flex gap-2 mb-3">
+                        <input type="text" id="newTeamKeyword" placeholder="ข้อความใน Contract Team..." class="flex-1 px-3 py-2 border border-slate-300 rounded-lg">
+                        <input type="text" id="newTeamAlias" placeholder="ชื่อย่อ (เช่น KT.1)..." class="w-32 px-3 py-2 border border-slate-300 rounded-lg">
+                        <button onclick="addTeamMapping()" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-medium">เพิ่มทีม</button>
+                    </div>
+                    <div class="border border-slate-200 rounded-xl overflow-hidden max-h-48 overflow-y-auto">
+                        <table class="w-full text-left">
+                            <thead class="bg-slate-50 text-slate-600 font-semibold border-b border-slate-200 sticky top-0">
+                                <tr>
+                                    <th class="p-2.5">Keyword ใน Contract Team</th>
+                                    <th class="p-2.5 w-32">ชื่อทีมย่อ</th>
+                                    <th class="p-2.5 w-16 text-right">ลบ</th>
+                                </tr>
+                            </thead>
+                            <tbody id="teamTableBody" class="divide-y divide-slate-100"></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <hr class="border-slate-200">
+
+                <div>
+                    <h4 class="font-bold text-slate-700 text-sm mb-2 flex items-center gap-1"><i data-lucide="list-filter" class="w-4 h-4 text-indigo-600"></i> จัดการรายการ Title ที่ต้องการคัดกรองออก</h4>
+                    <div class="flex gap-2 mb-3">
+                        <input type="text" id="newIgnoredTitleInput" placeholder="พิมพ์ข้อความ Title ที่ต้องการละเว้น..." class="flex-1 px-3 py-2 border border-slate-300 rounded-lg">
+                        <button onclick="addIgnoredTitle()" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-medium">เพิ่ม Title</button>
+                    </div>
+                    <div class="border border-slate-200 rounded-xl overflow-hidden max-h-48 overflow-y-auto">
+                        <table class="w-full text-left">
+                            <thead class="bg-slate-50 text-slate-600 font-semibold border-b border-slate-200 sticky top-0">
+                                <tr>
+                                    <th class="p-2.5">ข้อความ Title ที่ถูกละเว้น</th>
+                                    <th class="p-2.5 w-16 text-right">ลบ</th>
+                                </tr>
+                            </thead>
+                            <tbody id="ignoredTitlesTableBody" class="divide-y divide-slate-100"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            <div class="bg-slate-50 px-6 py-3 border-t border-slate-200 flex flex-wrap gap-2 justify-between items-center text-xs">
+                <button onclick="resetSettingsToDefault()" class="px-3 py-2 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-lg font-medium transition flex items-center gap-1">
+                    <i data-lucide="rotate-ccw" class="w-3.5 h-3.5"></i> คืนค่าเริ่มต้น (Reset Defaults)
+                </button>
+                <div class="flex items-center gap-2">
+                    <span id="configSummaryText" class="text-slate-400 hidden sm:inline">บันทึกข้อมูลอัตโนมัติในเบราว์เซอร์</span>
+                    <button onclick="closeSettingsModal()" class="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-lg font-medium">ปิดหน้าต่าง</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Script -->
+    <script>
+        const ZONE_MAP = {
+            "คลองหลวง": 1, "ธัญบุรี": 2, "สามโคก": 3, "หนองเสือ": 4, "ลาดหลุมแก้ว": 5,
+            "เมืองปทุมธานี": 6, "ลำลูกกา": 7, "ดอนเมือง": 8, "สายไหม": 9, "บางเขน": 10,
+            "หนองจอก": 11, "คลองสามวา": 12, "หลักสี่": 13, "ไทรน้อย": 14, "บางบัวทอง": 15,
+            "ปากเกร็ด": 16, "บางใหญ่": 17, "เมืองนนทบุรี": 18, "บางกรวย": 19, "บางซื่อ": 20,
+            "จตุจักร": 21, "ดุสิต": 22, "บึงกุ่ม": 23, "คันนายาว": 24, "ลาดพร้าว": 25,
+            "พญาไท": 26, "ราชเทวี": 27, "ดินแดง": 28, "ห้วยขวาง": 29, "วังทองหลาง": 30,
+            "บางกะปิ": 31, "ทวีวัฒนา": 32, "ตลิ่งชัน": 33, "บางพลัด": 34, "บางกอกน้อย": 35,
+            "บางกอกใหญ่": 36, "ภาษีเจริญ": 37, "บางแค": 38, "หนองแขม": 39, "ธนบุรี": 40,
+            "คลองสาน": 41, "บางบอน": 42, "จอมทอง": 43, "บางขุนเทียน": 44, "ทุ่งครุ": 45,
+            "ราษฎร์บูรณะ": 46, "ปทุมวัน": 47, "พระนคร": 48, "ป้อมปราบศัตรูพ่าย": 49, "สัมพันธวงศ์": 50,
+            "บางรัก": 51, "สาทร": 52, "บางคอแหลม": 53, "ยานนาวา": 54, "คลองเตย": 55,
+            "วัฒนา": 56, "สวนหลวง": 57, "สะพานสูง": 58, "พระโขนง": 59, "บางนา": 60,
+            "ประเวศ": 61, "มีนบุรี": 62, "ลาดกระบัง": 63, "พระประแดง": 64, "พระสมุทรเจดีย์": 65,
+            "เมืองสมุทรปราการ": 66, "บางพลี": 67, "บางเสาธง": 68, "บางบ่อ": 69,
+            "เกาะสมุย": "เกาะสมุย", "หัวหิน": "หัวหิน"
+        };
+
+        // ระบบจับเขตแบบแม่นยำสูง (Anti-Collision Precise Rules) ปรับปรุงให้แก้ปัญหาชนกันของชื่อแขวงและโครงการ
+        const EXACT_DISTRICT_RULES = [
+            // 1. จัดการแขวงในเขตวัฒนา (ป้องกันพระโขนงและคลองเตยแย่งจับคู่)
+            { match: ["พระโขนงเหนือ", "คลองเตยเหนือ", "คลองตันเหนือ"], district: "วัฒนา" },
+
+            // 2. ป้องกันชื่อคอนโด/โครงการหลอกชนกับชื่อเขตอื่น
+            { match: ["เดอะนิช รัชดา ห้วยขวาง", "เดอะนิชรัชดาห้วยขวาง", "เดอะนิช รัชดา-ห้วยขวาง"], district: "ดินแดง" },
+            { match: ["บางนา-สวนหลวง", "บางนาสวนหลวง", "ดอกไม้ ประเวศ", "แขวงดอกไม้"], district: "ประเวศ" },
+
+            // 3. ปรับสาทรและสวนหลวงให้ตรงตามการปกครองจริง
+            { match: ["ถนนนราธิวาสราชนครินทร์ ยานนาวา", "ยานนาวา สาทร", "ยานนาวาสาทร"], district: "สาทร" },
+            { match: ["พัฒนาการ50", "พัฒนาการ 50", "ซ.พัฒนาการ50"], district: "สวนหลวง" },
+
+            // 4. แยกแยะเขตที่มักชนกันด้วยชื่อถนน/โครงการ หรือที่อยู่ภาษาอังกฤษ
+            { match: ["tha raeng", "bang khen bangkok 10220", "ท่าแร้ง"], district: "บางเขน" },
+            { match: ["วิภาวดีรังสิต 20", "วิภาวดีรังสิต20", "จอมพล"], district: "จตุจักร" },
+            { match: ["สุขุมวิท 42", "สุขุมวิท42", "พระโขนง คลองเตย", "คลองเตย กรุงเทพ 10110"], district: "คลองเตย" },
+            { match: ["ลาดพร้าว71", "ลาดพร้าว 71", "คลองเจ้าคุณสิงห์"], district: "วังทองหลาง" },
+            { match: ["ลาดพร้าว94", "ลาดพร้าว 94", "พลับพลา"], district: "วังทองหลาง" },
+            { match: ["บางรักน้อย", "เมืองนนทบุรี นนทบุรี 11000", "บางรักน้อย เมืองนนทบุรี"], district: "เมืองนนทบุรี" },
+            { match: ["ศาลาธรรมสพน์", "พุทธมณฑลสาย 3"], district: "ทวีวัฒนา" },
+            { match: ["เซนต์บางนา", "ราชาเทวะ", "10540"], district: "บางพลี" },
+            { match: ["วงสว่าง", "บางเขน เมืองนนทบุรี", "11000"], district: "เมืองนนทบุรี" },
+            { match: ["ซ.จอมทอง", "ถ.จอมทอง จอมทอง"], district: "จอมทอง" },
+            { match: ["ต.บ้านใหม่ อ.เมือง จ.ปทุมธานี", "บ้านใหม่ เมืองปทุมธานี", "12000"], district: "เมืองปทุมธานี" },
+
+            // 5. ปริมณฑลและตำบลเฉพาะ (กำหนดให้ชัดเจน ป้องกันชนโครงการเช่น "บ้านกลางเมือง")
+            { match: ["ต.บ้านกลาง", "ตำบลบ้านกลาง", "บ้านกลาง เมืองปทุมธานี", "บ้านกลางเมืองปทุมธานี"], district: "เมืองปทุมธานี" },
+            { match: ["บางเสาธง", "10570", "เคหะบางพลี"], district: "บางเสาธง" },
+            { match: ["บางขุนเทียน", "ท่าข้าม"], district: "บางขุนเทียน" },
+            { match: ["เกาะสมุย", "84140"], district: "เกาะสมุย" },
+            { match: ["หัวหิน", "77110"], district: "หัวหิน" },
+            { match: ["บึงคำพร้อย", "ลำลูกกา คลอง", "คูคต", "ลาดสวาย", "เปียร์นนท์"], district: "ลำลูกกา" },
+            { match: ["ปากเกร็ด"], district: "ปากเกร็ด" },
+            { match: ["บางบัวทอง", "บางคูรัด"], district: "บางบัวทอง" },
+            { match: ["บางกรวย"], district: "บางกรวย" },
+            { match: ["บางใหญ่"], district: "บางใหญ่" },
+            { match: ["ไทรน้อย"], district: "ไทรน้อย" },
+            { match: ["คลองหลวง"], district: "คลองหลวง" },
+            { match: ["ธัญบุรี", "ประชาธิปัตย์ รังสิต"], district: "ธัญบุรี" },
+            { match: ["หนองเสือ"], district: "หนองเสือ" },
+            { match: ["สามโคก"], district: "สามโคก" },
+            { match: ["บางพลี", "บางปลา", "ราชาเทวะ"], district: "บางพลี" },
+            { match: ["บางบ่อ", "บางเพรียง"], district: "บางบ่อ" },
+            { match: ["พระประแดง"], district: "พระประแดง" },
+            { match: ["พระสมุทรเจดีย์"], district: "พระสมุทรเจดีย์" },
+            { match: ["เมืองสมุทรปราการ", "ท้ายบ้าน", "บางเมือง"], district: "เมืองสมุทรปราการ" },
+            { match: ["เมืองปทุมธานี"], district: "เมืองปทุมธานี" },
+            { match: ["เมืองนนทบุรี"], district: "เมืองนนทบุรี" }
+        ];
+
+        let DEFAULT_TEAM_MAPPINGS = [
+            { keyword: "AFPL_MA_KT (BKK)_4T_87325_FTH,PLB", alias: "KT.1" },
+            { keyword: "AFPL_MA_KT (Phra Pradaeng)_4T_87325_FTH,PLB", alias: "KT.2" },
+            { keyword: "AFPL_MA_KT (Samut Prakan)_4T_87325_FTH,PLB", alias: "KT.3" },
+            { keyword: "AFPL_MA_K.T. Wireless_(BKK)_4T_(EPL-Playbox)_82841_FTH", alias: "KT.4" },
+            { keyword: "AFPL_MA_K.T. Wireless_(Phra Pradaeng)_4T_(EPL-Playbox)_82841_FTH", alias: "KT.5" },
+            { keyword: "AFPL_MA_K.T. Wireless_(Samut Prakan)_4T_(EPL-Playbox)_82841_FTH", alias: "KT.6" },
+            { keyword: "AFPL_MA_ICT_ICT Corperation (BKK)_4T_16054_82841_FTH,PLB", alias: "ICT.1" },
+            { keyword: "AFPL_MA_ICT_Corperation (BKK)_4T_(EPL-Playbox)_82841_FTH", alias: "ICT.2" },
+            { keyword: "AFPL_MA_บจ.ออริจิ้น ไฟเบอร์_1012905_PLB,CAP,FTH", alias: "Origin.1" },
+            { keyword: "AFPL_MA_Origin Fiber (BKK)_4T_(EPL-Playbox)_1012905_FTH", alias: "Origin.2" },
+            { keyword: "AFPL_MA_AFP MA Monthly_WNP (BKK)_LT_FTH,+++", alias: "AFPL_WNP+++" }
+        ];
+
+        let DEFAULT_IGNORED_TITLES = [
+            "FTTH - L1 - (Unable to use) User Offline พบไฟ Status PON/LOS ติดสีแดง",
+            "FTTH - L1 - (Unable to use) User Online แต่ใช้งานไม่ได้ ตรวจสอบพบค่า Power Low",
+            "FTTH - Customer Request - ส่งช่างเข้าตรวจสอบ Mesh Home FibreLAN",
+            "FTTR - L1 - (Unable to use) User Offline พบไฟ Status PON/LOS ติดสีแดง",
+            "FTTH - (ใช้เฉพาะ OS Assigner) Support Heat Map",
+            "FTTH - (Request) ChangePackDevice - เปลี่ยนอุปกรณ์ Special_WiFi7",
+            "Fixed Line VoIP - L1 - อุปกรณ์ Router ไม่รองรับ Fixed Line",
+            "FTTH - (ใช้เฉพาะ NOC) Home Wi-Fi Procare - AP Long Offline/Weak Signal Detected",
+            "FTTH - (ใช้เฉพาะ NOC) Monitor 1Gbps Every Room (Mesh Fibre Optic Los)",
+            "FTTH - L1 - (Customer Request) ย้ายจุดใช้งาน / ย้ายอุปกรณ์ภายในบ้านเลขที่เดิม (เก็บเงินหน้างาน)",
+            "FTTH - L1 - (Customer Request) ขอ Sub เข้าเดินสาย LAN เพิ่ม (เก็บเงินหน้างาน)",
+            "FTTH - (ใช้เฉพาะ OS Assigner) งานเก็บอุปกรณ์ SP L3",
+            "FTTH - L1 - (Request) สายหย่อน/ไม่เป็นระเบียบ [ระบุ AIS Fibre ID ได้]",
+            "FTTR - L1 - (Welve) (Unable to use) User Offline พบไฟ Status PON/LOS ติดสีแดง",
+            "FTTH - L3 - Application - Website AISPLAY ดูไม่ได้/กระตุก บน Computer/Mobile Device",
+            "FTTH - L3 - Application - เล่น Game online ไม่ได้/หลุดบ่อย ผ่านสัญญาณ Wi-Fi",
+            "FTTR - L1 - (Unable to use) User Online แต่ใช้งานไม่ได้ ตรวจสอบพบค่า Power Low",
+            "FTTH - L1 - (Unable to use) Drop optic cable ภายนอกบ้านลูกค้ามีปัญหา ขาด/หัก/เสียหาย",
+            "FTTH - (ใช้เฉพาะ NOC Event Based) 1 Disconnect over criteria, Cannot reboot - IP not change",
+            "FTTH - (ใช้เฉพาะ NOC Event Based) 4 Disconnect over criteria, Still disconnect - within 24 hrs after reboot",
+            "FTTH - L3 - (Request) ตรวจสอบการตั้งค่ากล้อง CCTV แบบไม่ Forward Port ผ่าน Wi-Fi",
+            "FTTH - ลูกค้าขอ Renew ส่งช่างไปติดตั้งอุปกรณ์ใหม่",
+            "FTTH - L2 - Slow Speed - ใช้งานได้ช้า ไม่สามารถ Call Lan Sync ได้",
+            "Fixed Line VoIP – L3 – โทรเข้า-รับสายไม่ได้ทุกเบอร์",
+            "FTTH - Customer Request - ส่งช่างเข้าตรวจสอบ Router Net SmartBackup",
+            "FTTH - L1 - (Unable to use) Drop optic cable ภายในบ้านลูกค้ามีปัญหา ขาด/หัก/เสียหาย",
+            "FTTH - Proactive customer experience",
+            "FTTH - (Customer Request) Home FibreLan 1Gbps ย้ายจุดใช้งาน / ย้ายอุปกรณ์ภายในบ้านเลขที่เดิม (เก็บเงินหน้างาน)",
+            "FTTH – L1 - (Empowerment) ส่งช่างเข้าเดินสาย LAN",
+            "FTTH - Customer Request - ส่งช่างเข้าตรวจสอบ Mesh Office FibreLAN 1Gbps",
+            "FTTH - L2 - (Request) อุปกรณ์ Access point มีปัญหา ต้องการให้เจ้าหน้าที่เข้าแก้ไข",
+            "FTTH - (ใช้เฉพาะ NOC Existing) Signal Quality Low - Request Indoor",
+            "FTTR - L1 - (Customer Request) ขอ Sub เข้าเดินสาย LAN เพิ่ม (เก็บเงินหน้างาน)",
+            "FTTR - L1 - (Request) (Account Test AWN) นิติฯโครงการขอย้ายจุดติดตั้ง",
+            "FTTR - L1 - (Welve) (Unable to use) User Online แต่ใช้งานไม่ได้ ตรวจสอบพบค่า Power Low",
+            "FTTH - L1 - (Request) (Account Test AWN) นิติฯ โครงการขอย้ายจุดติดตั้ง",
+            "FTTH - L1 - Customer Request - Customer Complaint ติดตั้งไม่เรียบร้อย",
+            "FTTH - (ใช้เฉพาะ NOC) Application - Device Performance Prove",
+            "FTTR - Customer Request - ส่งช่างเข้าตรวจสอบ Mesh Home FibreLAN",
+            "FTTR - (ใช้เฉพาะ NOC) Home Wi-Fi Procare - AP Long Offline/Weak Signal Detected",
+            "FTTH - (Request) ChangePackDevice - เปลี่ยนอุปกรณ์ Office FibreLAN 1Gbps (2 Room)",
+            "FTTR - L1 - (Unable to use) Drop optic cable ภายในบ้านลูกค้ามีปัญหา ขาด/หัก/เสียหาย",
+            "FTTR - L1 - (Empowerment) ย้ายจุดติดตั้ง ONU ภายในบ้าน",
+            "Fixed Line VoIP – L3 – โทรออกหรือรับสายแล้วได้ยินเสียงเงียบ",
+            "FTTH - L1 - (Welve) (Unable to use) User Online แต่ใช้งานไม่ได้ ตรวจสอบพบค่า Power Low",
+            "FTTR - L1 - (Request) สายหย่อน/ไม่เป็นระเบียบ [ระบุ AIS Fibre ID ได้]",
+            "FTTR - L1 - (Customer Request) ย้ายจุดใช้งาน / ย้ายอุปกรณ์ภายในบ้านเลขที่เดิม (เก็บเงินหน้างาน)",
+            "FTTH - (Cloud IP Camera) - L1 - Unable to Use ตัวกล้องไฟไม่เข้า/ปุ่ม Reset ไม่ตอบสนอง",
+            "Fixed Line VoIP – L3 – อุปกรณ์ ATA มีปัญหา",
+            "FTTH - (Cloud IP Camera) - L3 - Unable to Use ฟังก์ชั่นการทำงานกล้องผิดปกติ",
+            "FTTR - L1 - (Welve) (Unable to use) Drop optic cable ภายในบ้านลูกค้ามีปัญหา ขาด/หัก/เสียหาย",
+            "FTTH - L1 - (Welve) (Unable to use) User Offline พบไฟ Status PON/LOS ติดสีแดง",
+            "FTTH - L1 - (Request) Campaign ขอ Empowerment ลูกค้า Nokia B1 เปลี่ยน Router หลักเป็น Super Mesh Wifi Router",
+            "FTTH – L1 - (Empowerment) ย้ายจุดติดตั้ง ONU ภายในบ้าน",
+            "FTTH - (ใช้เฉพาะ OS Assigner) Support Stream",
+            "FTTH - (ใช้เฉพาะ OS Assigner) Support Operation FTTH",
+            "FTTH - (ใช้เฉพาะ OS Assigner) Support Activity Fault MEA",
+            "FTTH - L2 - Unstable - Log Smart และ LAN Loss หลุดมากกว่า 12 ครั้ง",
+            "FTTH - L1 - (Empowerment) ย้ายจุดติดตั้ง ONU ภายในบ้าน",
+            "FTTH - (Request) ChangePackDevice - เปลี่ยนอุปกรณ์ Home FibreLAN PLUS III หรือ MAX 2Gbps (2 Room)",
+            "SOUNDBAR - L2 - กล่อง SOUNDBAR มีภาพ ไม่มีเสียง",
+            "FTTR - (ใช้เฉพาะ NOC) Monitor 1Gbps Every Room (Mesh Fibre Optic Los)",
+            "SOUNDBAR - L2 - กล่อง SOUNDBAR หน้าจอ TV ขึ้นไม่มีสัญญาณ",
+            "FTTH - L3 - (Request) ตรวจสอบการตั้งค่า Forward Port กล้อง CCTV (ไม่ได้ใช้กับ THDDNS)",
+            "FTTR - ลูกค้าขอ Renew ส่งช่างไปติดตั้งอุปกรณ์ใหม่",
+            "FTTH - (ใช้เฉพาะ NOC Event Based) 3 Disconnect criteria, Cannot reboot / CPE unbind",
+            "FTTH - L3 - (ใช้เฉพาะ Branch) Internet ใช้งานไม่ได้",
+            "FTTR - L1 - (Empowerment) ย้ายจุดติดตั้ง Router ภายในห้อง",
+            "FTTH - L3 - (Request) ตรวจสอบการตั้งค่ากล้อง CCTV แบบไม่ Forward Port ผ่านสาย LAN",
+            "FTTR - Proactive customer experience",
+            "FTTH - L3 - (ใช้เฉพาะ Branch) Internet ใช้งานไม่ได้",
+            "FTTH - (ใช้เฉพาะ FSS) Improvement & Solution",
+            "FTTR - (Last mile) (เฉพาะ NOC) ส่งติดตั้ง 4G Router ระหว่างรอแก้ไขแนวสาย Fiber Optic",
+            "FTTH (FTTR) - L1 - (Unable to use) User Offline พบไฟ Status PON/LOS ติดสีแดง",
+            "FTTR - L1 - Customer Request – Customer Complaint ติดตั้งไม่เรียบร้อย",
+            "FTTR - (ใช้เฉพาะ NOC Event Based) 1 Disconnect over criteria, Cannot reboot - IP not change",
+            "FTTR - (ใช้เฉพาะ NOC Event Based) 4 Disconnect over criteria, Still disconnect - within 24 hrs after reboot",
+            "FTTR - Customer Request - ส่งช่างเข้าตรวจสอบ Router WiFi7",
+            "FTTH - Customer Request - ส่งช่างเข้าตรวจสอบ Router WiFi7",
+            "FTTH - (ใช้เฉพาะ FSS) Support Case VIP Group",
+            "FTTH - L1 - (Customer Request) ขอ Sub เข้าดำเนินการเดินสายร้อยท่อ/เดินรางครอบสาย/เข้าหัว LAN (เก็บเงินหน้างาน)",
+            "FTTH - (ใช้เฉพาะ OS Assigner) Support เก็บสายหย่อน",
+            "FTTH - L3 - (ใช้เฉพาะ NOC) VIP internal  - Slow Speed",
+            "FTTH - (Request) ChangePackDevice - เปลี่ยนอุปกรณ์ Standard_High (with Mesh)",
+            "FTTH - (ใช้เฉพาะ OS Assigner) Support Heat Map",
+            "FTTH - (ใช้เฉพาะ NOC Event Based) 1 Disconnect over criteria, Cannot reboot - IP not change",
+            "FTTH - L1 - (Customer Request) ขอ Sub เข้าเดินสาย LAN เพิ่ม (เก็บเงินหน้างาน)",
+            "FTTR - L1 - Customer Request – Customer Complaint ทำทรัพย์สินเสียหาย",
+            "FTTH - (Request) ChangePackDevice - เปลี่ยนอุปกรณ์ Standard_High 1Gbps (with Mesh)",
+            "FTTH - ลูกค้าขอ Renew ส่งช่างไปติดตั้งอุปกรณ์ใหม่",
+            "FTTH - (Request) ChangePackDevice - เปลี่ยนอุปกรณ์ Special 1 ตัว",
+            "FTTH - (ใช้เฉพาะ NOC) Monitor 1Gbps Every Room (Mesh Fibre Optic Los)",
+            "FTTH - (ใช้เฉพาะ NOC Event Based) 1 Disconnect over criteria, Cannot reboot - IP not change",
+            "FTTR - L1 - Customer Request – Customer Complaint ติดตั้งไม่เรียบร้อย",
+            "FTTH - (ใช้เฉพาะ NOC Event Based) 4 Disconnect over criteria, Still disconnect - within 24 hrs after reboot",
+            "FTTH - (ใช้เฉพาะ OS Assigner) Support Heat Map",
+            "SOUNDBAR - L1 - กล่อง SOUNDBAR ไฟไม่เข้า",
+            "FTTH - L1 - (Empowerment) ส่งช่างเดินสายร้อยท่อ/underground ใหม่ (ติดสัญญา 12 เดือน)",
+            "FTTH - L3 - (ใช้เฉพาะ Branch) Internet ใช้งานได้ช้า",
+            "FTTH - (ใช้เฉพาะ OS Assigner) งานเก็บอุปกรณ์ SP L3",
+            "3BB GIGATV BOX - L1 - กล่อง GIGATV BOX ไม่ทำงาน (ไฟไม่ติด)",
+            "FTTH - (ใช้เฉพาะ NOC) Proactive High Latency Monitoring",
+            "FTTH - (ใช้เฉพาะ OS Assigner) Support Activity Fault MEA",
+            "FTTH - (ใช้เฉพาะ OS Assigner) Support ย้าย Splitter",
+            "FTTH - (ใช้เฉพาะ OS Assigner) Support Operation FTTH",
+            "FTTH - (ใช้เฉพาะ NOC) Router Replacement",
+            "FTTH - (ใช้เฉพาะ NOC Event Based) 4 Disconnect over criteria, Still disconnect - within 24 hrs after reboot",
+            "FTTH - (ใช้เฉพาะทีม NOC) Engineering Reserve Time Slot",
+            "3BB GIGATV App - Unable to use - ดู Live TV ไม่ได้ /หน้าจอดำ",
+            "FTTH - (ใช้เฉพาะ OS Assigner) Support Stream",
+            "3BB GIGATV BOX - Unable to use - กล่อง GIGATV BOX ต่อผ่าน LAN หรือ WiFi แจ้งเตือนแสดง Error Code",
+            "FTTH - (ใช้เฉพาะ NOC Existing) Signal Quality Low",
+            "FTTH - Customer Request - ส่งช่างเข้าตรวจสอบ Mesh Home FibreLAN",
+            "FTTH - (Cloud IP Camera) - L1 - Unable to Use ตัวกล้องไฟไม่เข้า/ปุ่ม Reset ไม่ตอบสนอง",
+            "FTTH - (ใช้เฉพาะ Engineer Region) Signal Quality Low (Lastmile)",
+            "FTTH - (ใช้เฉพาะ Engineer Region) ใช้งาน Internet ได้ไม่เสถียร (Disconnected)",
+            "3BB GIGATV BOX - Unable to use - ดู Live TV ไม่ได้ /หน้าจอดำ",
+            "3BB GIGATV BOX - Unable to use - ปัญหา GIGATV BOX WI-FI หรือ สาย LAN ขึ้นสถานะไม่เชื่อมต่อ",
+            "3BB GIGATV BOX - Unstable - ดู Live TV ไม่คมชัด /สะดุด",
+            "3BB GIGATV App - Unable to use - ปัญหารับชม Content VOD ไม่ได้/หน้าจอดำ/มี Error",
+            "FTTH - (ใช้เฉพาะ OS Assigner) Support งานแก้ไข Repeat job",
+            "FTTH - (ใช้เฉพาะ NOC Event Based) 1 Disconnect over criteria, Cannot reboot - IP not change",
+            "FTTH - (ใช้เฉพาะทีมช่าง 3BB) เพื่อเข้าแก้ไขงานติดตั้ง/งานซ่อมไม่ได้มาตรฐาน",
+            "FTTH - (3BB IP Camera) - L2 - Unable to Use - ดูกล้องไม่ได้/กล้องเชื่อม WIFI ไม่ได้",
+            "Fixed Line VoIP - L1 - อุปกรณ์ Router ไม่รองรับ Fixed Line",
+            "FTTB - L1 - (Empowerment) ย้ายจุดติดตั้ง Router ภายในห้อง",
+            "FTTR - L1 - (Customer Request) ย้ายจุดใช้งาน / ย้ายอุปกรณ์ภายในบ้านเลขที่เดิม (เก็บเงินหน้างาน)",
+            "FTTH - (Request) ChangePackDevice - เปลี่ยนอุปกรณ์ Home FibreLAN PLUS (2 Room)",
+            "FTTR - (Cloud IP Camera) - L3 - Unable to Use ปัญหาเชื่อมต่อผ่านสัญญาณ Wi-Fi 2.4 ไม่ได้",
+            "FTTR - (ใช้เฉพาะ OS Assigner) Support Heat Map",
+            "AIS PLAYBOX - L1 - ส่งช่างเข้าเปลี่ยน Remote AIS PLAYBOX รุ่นใหม่ ปี 2022",
+            "FTTH - L3 - Customer Request - ตรวจสอบการเชื่อมต่อกับ Printer",
+            "FTTH - L1 - (Empowerment) ส่งช่างติดตั้งอุปกรณ์ใหม่เนื่องจากน้ำท่วม",
+            "FTTR - L1 - (Empowerment) ส่งช่างติดตั้งอุปกรณ์ใหม่เนื่องจากน้ำท่วม",
+            "FTTB - L1 - (Empowerment) ส่งช่างติดตั้งอุปกรณ์ใหม่เนื่องจากน้ำท่วม",
+            "FTTH - L3 - (ใช้เฉพาะ Branch) Internet ใช้งานหลุดบ่อย",
+            "FTTH - L1 - (Request) สายหย่อน/ไม่เป็นระเบียบ [ไม่ทราบ AIS Fibre ID-กรุงเทพฯ/ปริมณฑล]",
+            "FTTH - (ใช้เฉพาะ NOC) Application - Performance Prove อุปกรณ์ 1Gbps Every Room"
+        ];
+
+        DEFAULT_IGNORED_TITLES = [...new Set(DEFAULT_IGNORED_TITLES)];
+
+        function loadStore(key, def) {
+            try { const v = JSON.parse(localStorage.getItem(key)); return Array.isArray(v) ? v : [...def]; }
+            catch (e) { return [...def]; }
+        }
+        function saveStore(key, val) {
+            try { localStorage.setItem(key, JSON.stringify(val)); } catch (e) { console.warn('localStorage ใช้งานไม่ได้', e); }
+        }
+        function safeIcons() { if (window.lucide) lucide.createIcons(); }
+        function normText(s) {
+            return String(s || '').normalize('NFC').replace(/[\u2013\u2014]/g, '-').replace(/\s+/g, ' ').trim().toLowerCase();
+        }
+
+        let teamMappings = loadStore('custom_team_mappings', DEFAULT_TEAM_MAPPINGS);
+        let ignoredTitles = loadStore('custom_ignored_titles', DEFAULT_IGNORED_TITLES);
+
+        let rawRows = [];
+        let passedData = [];
+        let filteredOutData = [];
+        let activeCardFilter = 'passed';
+
+        let currentSortColumn = null;
+        let currentSortDirection = 'asc';
+
+        const COLUMNS_DEF = [
+            { key: 'symtom', label: 'Symtom' },
+            { key: 'nonId', label: 'เลข non / TT' },
+            { key: 'techName', label: 'ชื่อช่าง' },
+            { key: 'sup', label: 'SUP' },
+            { key: 'timeRaw', label: 'เวลา' },
+            { key: 'address', label: 'ที่อยู่' },
+            { key: 'district', label: 'เขต' },
+            { key: 'slot', label: 'SLOT', bg: 'bg-amber-50 text-amber-900' },
+            { key: 'translatedWork', label: 'งาน', bg: 'bg-indigo-50 text-indigo-900' },
+            { key: 'team', label: 'ทีม', bg: 'bg-blue-50 text-blue-900' },
+            { key: 'zone', label: 'โซน', bg: 'bg-emerald-50 text-emerald-700' }
+        ];
+
+        document.addEventListener("DOMContentLoaded", () => {
+            safeIcons();
+            populateZoneDropdown();
+            updateSettingsUI();
+            renderTableHeader();
+
+            // รองรับคลิกพื้นหลัง Modal หรือกด ESC เพื่อปิดหน้าต่าง
+            const modalEl = document.getElementById('settingsModal');
+            modalEl.addEventListener('click', (e) => {
+                if (e.target === modalEl) closeSettingsModal();
+            });
+            document.addEventListener('keydown', (e) => {
+                if (e.key === 'Escape' && !modalEl.classList.contains('hidden')) {
+                    closeSettingsModal();
+                }
+            });
+        });
+
+        function populateZoneDropdown() {
+            const select = document.getElementById('zoneFilter');
+            select.innerHTML = '<option value="">-- ทุกโซน --</option><option value="#N/A">-- ไม่พบโซน (#N/A) --</option>';
+            const sortedZones = [...new Set(Object.values(ZONE_MAP))].sort((a,b) => {
+                if(typeof a === 'number' && typeof b === 'number') return a - b;
+                return String(a).localeCompare(String(b));
+            });
+            sortedZones.forEach(z => {
+                const opt = document.createElement('option');
+                opt.value = z;
+                opt.textContent = typeof z === 'number' ? `โซน ${z}` : `เขต: ${z}`;
+                select.appendChild(opt);
+            });
+        }
+
+        function renderTableHeader() {
+            const tr = document.getElementById('tableHeaderRow');
+            tr.innerHTML = '';
+            COLUMNS_DEF.forEach(col => {
+                const th = document.createElement('th');
+                let className = "p-3 border-r border-slate-200 whitespace-nowrap cursor-pointer hover:bg-slate-200 transition select-none ";
+                if (col.bg) className += col.bg + " ";
+                th.className = className;
+                
+                let sortIcon = '<i data-lucide="arrow-up-down" class="w-3.5 h-3.5 inline ml-1 opacity-40"></i>';
+                if (currentSortColumn === col.key) {
+                    sortIcon = currentSortDirection === 'asc' 
+                        ? '<i data-lucide="arrow-up" class="w-3.5 h-3.5 inline ml-1 text-indigo-600 font-bold"></i>' 
+                        : '<i data-lucide="arrow-down" class="w-3.5 h-3.5 inline ml-1 text-indigo-600 font-bold"></i>';
+                }
+
+                th.innerHTML = `${col.label} ${sortIcon}`;
+                th.onclick = () => sortTable(col.key);
+                tr.appendChild(th);
+            });
+            safeIcons();
+        }
+
+        function sortTable(columnKey) {
+            if (currentSortColumn === columnKey) {
+                currentSortDirection = currentSortDirection === 'asc' ? 'desc' : 'asc';
+            } else {
+                currentSortColumn = columnKey;
+                currentSortDirection = 'asc';
+            }
+            renderTableHeader();
+            renderTable();
+        }
+
+        function getSlotByTime(timeStr) {
+            if (!timeStr) return "s1/";
+            const cleanTime = String(timeStr).trim();
+            const parts = cleanTime.split(':');
+            if (parts.length < 2) return "s1/";
+            
+            const hour = parseInt(parts[0], 10);
+            const minute = parseInt(parts[1], 10);
+            const totalMinutes = hour * 60 + minute;
+
+            if (totalMinutes >= 540 && totalMinutes < 660) return "s1/";
+            if (totalMinutes >= 660 && totalMinutes < 780) return "s2/";
+            if (totalMinutes >= 780 && totalMinutes < 900) return "s3/";
+            if (totalMinutes >= 900 && totalMinutes < 1020) return "s4/";
+            if (totalMinutes >= 1020) return "s5/";
+            
+            return "s1/";
+        }
+
+        const THAI_ALIASES = [["ป้อมปราบ", "ป้อมปราบศัตรูพ่าย"]];
+        const EN_DISTRICTS = {
+            "khlongluang":"คลองหลวง","thanyaburi":"ธัญบุรี","samkhok":"สามโคก","nongsua":"หนองเสือ","latlumkaeo":"ลาดหลุมแก้ว","lamlukka":"ลำลูกกา",
+            "donmueang":"ดอนเมือง","donmuang":"ดอนเมือง","saimai":"สายไหม","bangkhen":"บางเขน","nongchok":"หนองจอก","khlongsamwa":"คลองสามวา","laksi":"หลักสี่",
+            "sainoi":"ไทรน้อย","bangbuathong":"บางบัวทอง","pakkret":"ปากเกร็ด","bangyai":"บางใหญ่","bangkruai":"บางกรวย","bangsue":"บางซื่อ",
+            "chatuchak":"จตุจักร","dusit":"ดุสิต","buengkum":"บึงกุ่ม","khannayao":"คันนายาว","ladprao":"ลาดพร้าว","latphrao":"ลาดพร้าว",
+            "phayathai":"พญาไท","ratchathewi":"ราชเทวี","dindaeng":"ดินแดง","huaikhwang":"ห้วยขวาง","wangthonglang":"วังทองหลาง","bangkapi":"บางกะปิ",
+            "thawiwatthana":"ทวีวัฒนา","talingchan":"ตลิ่งชัน","bangphlat":"บางพลัด","bangkoknoi":"บางกอกน้อย","bangkokyai":"บางกอกใหญ่",
+            "phasicharoen":"ภาษีเจริญ","bangkhae":"บางแค","nongkhaem":"หนองแขม","thonburi":"ธนบุรี","khlongsan":"คลองสาน","bangbon":"บางบอน",
+            "chomthong":"จอมทอง","bangkhunthian":"บางขุนเทียน","thungkhru":"ทุ่งครุ","ratburana":"ราษฎร์บูรณะ","pathumwan":"ปทุมวัน",
+            "phranakhon":"พระนคร","pomprapsattruphai":"ป้อมปราบศัตรูพ่าย","samphanthawong":"สัมพันธวงศ์","bangrak":"บางรัก","sathon":"สาทร",
+            "sathorn":"สาทร","bangkholaem":"บางคอแหลม","yannawa":"ยานนาวา","khlongtoei":"คลองเตย","watthana":"วัฒนา","suanluang":"สวนหลวง",
+            "saphansung":"สะพานสูง","phrakhanong":"พระโขนง","bangna":"บางนา","prawet":"ประเวศ","minburi":"มีนบุรี","latkrabang":"ลาดกระบัง",
+            "phrapradaeng":"พระประแดง","phrasamutchedi":"พระสมุทรเจดีย์","bangphli":"บางพลี","bangbo":"บางบ่อ","bangsaothong":"บางเสาธง",
+            "kosamui":"เกาะสมุย","kohsamui":"เกาะสมุย","huahin":"หัวหิน",
+            "muangnonthaburi":"เมืองนนทบุรี","mueangnonthaburi":"เมืองนนทบุรี",
+            "muangpathumthani":"เมืองปทุมธานี","mueangpathumthani":"เมืองปทุมธานี",
+            "muangsamutprakan":"เมืองสมุทรปราการ","mueangsamutprakan":"เมืองสมุทรปราการ"
+        };
+        const DISTRICT_NAMES_BY_LEN = Object.keys(ZONE_MAP).sort((a, b) => b.length - a.length);
+        const EN_KEYS_BY_LEN = Object.keys(EN_DISTRICTS).sort((a, b) => b.length - a.length);
+        const ROAD_NAME_RX = new RegExp('(?:ถนน|ถ\\.|ซอย|ซ\\.)(?:' + DISTRICT_NAMES_BY_LEN.join('|') + ')', 'g');
+        const _rxCache = new Map();
+
+        function compactText(s) { return String(s || '').toLowerCase().replace(/\s+/g, ''); }
+
+        // pattern → RegExp (ตัวเลขต้องไม่ติดกับตัวเลขอื่น เช่น 11000 ต้องไม่ไปจับ 111000)
+        function matchRx(pattern) {
+            let rx = _rxCache.get(pattern);
+            if (!rx) {
+                const p = compactText(pattern).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                rx = new RegExp((/^\d/.test(p) ? '(?<!\\d)' : '') + p + (/\d$/.test(p) ? '(?!\\d)' : ''));
+                _rxCache.set(pattern, rx);
+            }
+            return rx;
+        }
+
+        function extractDistrictAdvanced(addressStr) {
+            if (!addressStr) return "";
+            const addr = compactText(addressStr);
+
+            // 0) ระบุ "เขต/อำเภอ" ตรง ๆ (แม่นที่สุด ไม่โดนชื่อถนนหรือชื่อแขวงที่ซ้ำกับเขตอื่น)
+            const mm = addr.match(/(?:อ\.|อำเภอ)เมือง(?:จ\.|จังหวัด)?(ปทุมธานี|นนทบุรี|สมุทรปราการ)/);
+            if (mm) return "เมือง" + mm[1];
+            for (const prefix of ["เขต", "อำเภอ", "อ.", "khet", "amphoe", "amphur"]) {
+                let from = 0, idx;
+                while ((idx = addr.indexOf(prefix, from)) !== -1) {
+                    const rest = addr.slice(idx + prefix.length);
+                    const hit = DISTRICT_NAMES_BY_LEN.find(n => rest.startsWith(compactText(n)));
+                    if (hit) return hit;
+                    const al = THAI_ALIASES.find(a => rest.startsWith(a[0]));
+                    if (al) return al[1];
+                    from = idx + prefix.length;
+                }
+            }
+
+            // ตัดชื่อถนนที่มีชื่อเขตปนอยู่ออก ป้องกัน False Match
+            // แปลงคำว่า "คลองถนน" ชั่วคราวเพื่อไม่ให้ Regex มองคำว่า "ถนนสายไหม" เป็นชื่อถนน
+            const addr2 = addr
+                .replace(/คลองถนน/g, 'คลองถะนน')
+                .replace(/บางกรวย-ไทรน้อย|บางนา-ตราด|บางนาตราด|พระนครศรีอยุธยา/g, '');
+
+            // 1) กฎความแม่นยำสูง (Anti-Collision Precise Rules)
+            for (const rule of EXACT_DISTRICT_RULES) {
+                if (rule.match.some(m => matchRx(m).test(addr2))) return rule.district;
+            }
+
+            // 2) ชื่อเขตใน ZONE_MAP (เรียงชื่อยาวก่อน และไม่นับชื่อที่อยู่หลัง ถนน/ซอย)
+            const stripped = addr2.replace(ROAD_NAME_RX, '');
+            for (const n of DISTRICT_NAMES_BY_LEN) {
+                if (stripped.includes(compactText(n))) return n;
+            }
+            for (const a of THAI_ALIASES) { if (stripped.includes(a[0])) return a[1]; }
+
+            // 3) ที่อยู่ภาษาอังกฤษล้วน
+            if (!/[\u0E00-\u0E7F]/.test(String(addressStr))) {
+                for (const k of EN_KEYS_BY_LEN) { if (addr2.includes(k)) return EN_DISTRICTS[k]; }
+            }
+            return "";
+        }
+
+        function extractTime(v) {
+            const DEF = "09:00:00";
+            if (v === undefined || v === null) return DEF;
+            const s = String(v).trim();
+            if (!s) return DEF;
+            const pad = n => String(n).padStart(2, '0');
+            if (/^\d+(\.\d+)?$/.test(s)) {            // เลข serial ของ Excel
+                const n = parseFloat(s);
+                if (n > 0 && (s.includes('.') || n >= 20000)) {
+                    const secs = Math.round((n - Math.floor(n)) * 86400) % 86400;
+                    return `${pad(Math.floor(secs / 3600))}:${pad(Math.floor(secs % 3600 / 60))}:${pad(secs % 60)}`;
+                }
+                return DEF;
+            }
+            const m = s.match(/(\d{1,2}):(\d{2})(?::(\d{2}))?(?:\s*([AaPp])\.?[Mm]\.?)?/);
+            if (!m) return DEF;
+            let h = parseInt(m[1], 10);
+            const mi = parseInt(m[2], 10), se = m[3] ? parseInt(m[3], 10) : 0;
+            if (m[4]) {
+                const pm = m[4].toLowerCase() === 'p';
+                if (pm && h < 12) h += 12;
+                if (!pm && h === 12) h = 0;
+            }
+            if (h > 23 || mi > 59 || se > 59) return DEF;
+            return `${pad(h)}:${pad(mi)}:${pad(se)}`;
+        }
+
+        function reprocess() { if (rawRows.length) parseRawJsonObject(rawRows, true); }
+
+        function mapContractTeamToAlias(contractTeamStr) {
+            if (!contractTeamStr) return "#N/A";
+            const nTeam = normText(contractTeamStr);
+            for (let tm of teamMappings) {
+                const nk = normText(tm.keyword);
+                if (nk && nTeam.includes(nk)) {
+                    return tm.alias;
+                }
+            }
+            return "#N/A";
+        }
+
+        function handleFileSelect(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            document.getElementById('selectedFileName').textContent = file.name;
+            document.getElementById('fileNameDisplay').classList.remove('hidden');
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const data = new Uint8Array(e.target.result);
+                    const workbook = XLSX.read(data, { type: 'array', raw: true });
+                    const firstSheetName = workbook.SheetNames[0];
+                    const worksheet = workbook.Sheets[firstSheetName];
+                    const jsonData = XLSX.utils.sheet_to_json(worksheet, { defval: "" });
+
+                    if (!jsonData || jsonData.length === 0) {
+                        alert('ไม่พบข้อมูลในไฟล์ Excel ที่เลือก');
+                        return;
+                    }
+
+                    parseRawJsonObject(jsonData);
+                } catch (error) {
+                    alert('เกิดข้อผิดพลาดในการอ่านไฟล์ Excel: ' + error.message);
+                    console.error(error);
+                }
+            };
+            reader.onerror = () => alert('ไม่สามารถอ่านไฟล์ได้');
+            reader.readAsArrayBuffer(file);
+            event.target.value = '';
+        }
+
+        function parseRawJsonObject(dataList, keepView = false) {
+            rawRows = dataList;
+            passedData = [];
+            filteredOutData = [];
+
+            dataList.forEach((row) => {
+                const rowKeys = Object.keys(row);
+                
+                // ฟังก์ชัน getVal ป้องกัน null/undefined และรองรับคอลัมน์หลายรูปแบบ
+                const getVal = (exactKeys, fuzzyKeys = []) => {
+                    for (const pk of exactKeys) {
+                        const p = pk.trim().toLowerCase();
+                        const k = rowKeys.find(k => k.trim().toLowerCase() === p);
+                        if (k !== undefined && row[k] !== null && row[k] !== undefined) {
+                            return String(row[k]).trim();
+                        }
+                    }
+                    for (const pk of fuzzyKeys) {
+                        const p = pk.trim().toLowerCase();
+                        const k = rowKeys.find(k => k.trim().toLowerCase().includes(p));
+                        if (k !== undefined && row[k] !== null && row[k] !== undefined) {
+                            return String(row[k]).trim();
+                        }
+                    }
+                    return "";
+                };
+
+                const processingStatus = getVal(["Processing Status", "Task Status", "Status"], ["Processing Status", "Task Status"]);
+                const symtom = getVal(["Title", "Symtom"], ["Title"]);
+                const nonId = getVal(["Access Number", "เลข non / TT", "เลข non", "TT"], ["Access Number", "เลข non"]);
+                const techName = getVal(["Field Engineer", "ชื่อช่าง"], ["Field Engineer", "ชื่อช่าง"]) || "system";
+                const sup = getVal(["Contract Team", "SUP"], ["Contract Team"]) || "ROM-AIS_บจ";
+                const planTimeVal = getVal(["Plan Arrival Time", "เวลา"], ["Plan Arrival Time"]);
+                
+                // ดึงที่อยู่รองรับทั้ง Installation Address, Customer Address, Service Address
+                const address = getVal(
+                    ["Address", "ที่อยู่", "Installation Address", "Service Address", "Customer Address"],
+                    ["install", "service address", "customer address", "address", "ที่อยู่"]
+                );
+
+                if (!symtom && !nonId && !address) return;
+
+                let rejectReason = "";
+                let shouldSkip = false;
+
+                const allowedStatuses = ["prepare", "new", "scheduled"];
+                if (processingStatus && !allowedStatuses.includes(processingStatus.toLowerCase())) {
+                    shouldSkip = true;
+                    rejectReason = `Status ไม่ตรงเงื่อนไข (${processingStatus})`;
+                }
+
+                if (!shouldSkip) {
+                    const nSym = normText(symtom);
+                    for (let ign of ignoredTitles) {
+                        const nIgn = normText(ign);
+                        if (nIgn && nSym.includes(nIgn)) {
+                            shouldSkip = true;
+                            rejectReason = `Title ตรงกับรายการละเว้น`;
+                            break;
+                        }
+                    }
+                }
+
+                if (!shouldSkip) {
+                    const symLower = symtom.toLowerCase();
+                    const symUpper = symtom.toUpperCase();
+                    if (nonId.startsWith("888") && symUpper.includes("FTTB")) { shouldSkip = true; rejectReason = "Access 888 + FTTB"; }
+                    else if (nonId.startsWith("888") && symUpper.includes("3BB")) { shouldSkip = true; rejectReason = "Access 888 + 3BB"; }
+                    else if (symLower.includes("support stream")) { shouldSkip = true; rejectReason = "มียกเว้น Support Stream"; }
+                    else if (symtom.includes("ย้ายแนวสาย")) { shouldSkip = true; rejectReason = "มียกเว้น ย้ายแนวสาย"; }
+                    else if (symLower.includes("camera")) { shouldSkip = true; rejectReason = "มียกเว้น Camera"; }
+                }
+
+                if (!shouldSkip) {
+                    const supUpper = sup.toUpperCase();
+                    if (/(^|[^A-Z0-9])(RED|OSM)([^A-Z0-9]|$)/.test(supUpper)) {
+                        shouldSkip = true;
+                        rejectReason = `SUP มี RED หรือ OSM`;
+                    }
+                }
+
+                const timeStr = extractTime(planTimeVal);
+
+                const district = extractDistrictAdvanced(address);
+                const zone = ZONE_MAP[district] || district || "#N/A";
+                const slot = getSlotByTime(timeStr);
+                const districtDisplay = district || "ไม่ระบุเขต";
+                
+                let translatedWork = `${slot}${nonId}/${districtDisplay}/${timeStr}`;
+                if (symtom.toUpperCase().includes("FTTB")) {
+                    translatedWork += " FTTB";
+                }
+
+                const teamAlias = mapContractTeamToAlias(sup);
+
+                const itemObj = {
+                    symtom,
+                    nonId,
+                    techName,
+                    sup,
+                    timeRaw: timeStr,
+                    address,
+                    district: district || "#N/A",
+                    slot,
+                    translatedWork,
+                    team: teamAlias,
+                    zone,
+                    rejectReason
+                };
+
+                if (shouldSkip) {
+                    filteredOutData.push(itemObj);
+                } else {
+                    passedData.push(itemObj);
+                }
+            });
+
+            updateStats();
+            if (!keepView) {
+                activeCardFilter = 'passed';
+                document.getElementById('resetFilterBtn').classList.add('hidden');
+            }
+            renderTable();
+            if (!keepView && dataList.length > 0 && passedData.length + filteredOutData.length === 0) {
+                alert('ไม่พบข้อมูลที่อ่านได้ กรุณาตรวจสอบว่าหัวตาราง (Title / Access Number / Address ฯลฯ) อยู่ในแถวแรกของไฟล์');
+            }
+
+            document.getElementById('resultControls').classList.remove('hidden');
+            document.getElementById('tableContainer').classList.remove('hidden');
+        }
+
+        function updateStats() {
+            document.getElementById('statTotal').textContent = passedData.length;
+            document.getElementById('statFilteredOut').textContent = filteredOutData.length;
+            const mappedCount = passedData.filter(d => d.zone !== "#N/A").length;
+            document.getElementById('statZoneMapped').textContent = mappedCount;
+        }
+
+        function filterByCard(cardType) {
+            activeCardFilter = cardType;
+            document.getElementById('resetFilterBtn').classList.remove('hidden');
+            renderTable();
+        }
+
+        function resetCardFilter() {
+            activeCardFilter = 'passed';
+            document.getElementById('resetFilterBtn').classList.add('hidden');
+            renderTable();
+        }
+
+        function getVisibleRows() {
+            const search = document.getElementById('searchInput').value.toLowerCase().trim();
+            const selectedZone = document.getElementById('zoneFilter').value;
+            let dataset = [], viewTitle = "";
+            if (activeCardFilter === 'passed') {
+                dataset = passedData;
+                viewTitle = "กำลังแสดง: ข้อมูลที่ผ่านการกรอง (Prepare/New/Scheduled)";
+            } else if (activeCardFilter === 'filteredOut') {
+                dataset = filteredOutData;
+                viewTitle = "กำลังแสดง: ข้อมูลที่ถูกคัดกรองออก (พร้อมสาเหตุการคัดกรอง)";
+            } else if (activeCardFilter === 'mapped') {
+                dataset = passedData.filter(d => d.zone !== "#N/A");
+                viewTitle = "กำลังแสดง: ข้อมูลที่แมปโซนสำเร็จ";
+            }
+            const filtered = dataset.filter(item => {
+                const matchesSearch = Object.values(item).some(val => String(val).toLowerCase().includes(search));
+                const matchesZone = selectedZone === "" || String(item.zone) === String(selectedZone);
+                return matchesSearch && matchesZone;
+            });
+            if (currentSortColumn) {
+                filtered.sort((a, b) => {
+                    let valA = a[currentSortColumn] ?? "";
+                    let valB = b[currentSortColumn] ?? "";
+                    if (typeof valA === 'number' && typeof valB === 'number') {
+                        return currentSortDirection === 'asc' ? valA - valB : valB - valA;
+                    }
+                    valA = String(valA).toLowerCase();
+                    valB = String(valB).toLowerCase();
+                    if (valA < valB) return currentSortDirection === 'asc' ? -1 : 1;
+                    if (valA > valB) return currentSortDirection === 'asc' ? 1 : -1;
+                    return 0;
+                });
+            }
+            return { dataset, filtered, viewTitle };
+        }
+
+        function renderTable() {
+            const tbody = document.getElementById('tableBody');
+            tbody.innerHTML = '';
+
+            const view = getVisibleRows();
+            const dataset = view.dataset, filtered = view.filtered;
+            document.getElementById('activeViewIndicator').textContent = view.viewTitle;
+            document.getElementById('tableCountInfo').textContent = `แสดง ${filtered.length} รายการ (จากทั้งหมดในกลุ่ม ${dataset.length} รายการ)`;
+
+            if (filtered.length === 0) {
+                document.getElementById('emptySearch').classList.remove('hidden');
+            } else {
+                document.getElementById('emptySearch').classList.add('hidden');
+            }
+
+            const frag = document.createDocumentFragment();
+            filtered.forEach((row) => {
+                const tr = document.createElement('tr');
+                tr.className = "hover:bg-slate-50 transition border-b border-slate-100 text-xs";
+                
+                let symtomDisplay = escapeHtml(row.symtom);
+                if (activeCardFilter === 'filteredOut' && row.rejectReason) {
+                    symtomDisplay = `<span class="text-red-600 font-semibold">[เหตุผล: ${escapeHtml(row.rejectReason)}]</span> ${symtomDisplay}`;
+                }
+
+                tr.innerHTML = `
+                    <td class="p-3 font-medium border-r border-slate-100 max-w-xs truncate" title="${escapeHtml(row.symtom)}">${symtomDisplay}</td>
+                    <td class="p-3 border-r border-slate-100 font-mono text-indigo-600">${escapeHtml(row.nonId)}</td>
+                    <td class="p-3 border-r border-slate-100">${escapeHtml(row.techName)}</td>
+                    <td class="p-3 border-r border-slate-100 max-w-xs truncate" title="${escapeHtml(row.sup)}">${escapeHtml(row.sup)}</td>
+                    <td class="p-3 border-r border-slate-100 font-mono">${escapeHtml(row.timeRaw)}</td>
+                    <td class="p-3 border-r border-slate-100 max-w-xs truncate" title="${escapeHtml(row.address)}">${escapeHtml(row.address)}</td>
+                    <td class="p-3 border-r border-slate-100 font-semibold text-slate-700">${escapeHtml(row.district)}</td>
+                    <td class="p-3 border-r border-slate-100 font-mono bg-amber-50 text-amber-800 font-bold">${escapeHtml(row.slot)}</td>
+                    <td class="p-3 border-r border-slate-100 font-mono bg-indigo-50 text-indigo-700 font-semibold">${escapeHtml(row.translatedWork)}</td>
+                    <td class="p-3 border-r border-slate-100 font-bold bg-blue-50 text-blue-800 text-center">${escapeHtml(row.team)}</td>
+                    <td class="p-3 font-bold bg-emerald-50 text-emerald-700 text-center">${escapeHtml(row.zone)}</td>
+                `;
+                frag.appendChild(tr);
+            });
+            tbody.appendChild(frag);
+        }
+
+        function openSettingsModal() {
+            document.getElementById('settingsModal').classList.remove('hidden');
+            updateSettingsUI();
+        }
+
+        function closeSettingsModal() {
+            document.getElementById('settingsModal').classList.add('hidden');
+        }
+
+        function updateSettingsUI() {
+            const teamTbody = document.getElementById('teamTableBody');
+            teamTbody.innerHTML = '';
+            teamMappings.forEach((tm, idx) => {
+                const tr = document.createElement('tr');
+                tr.className = "hover:bg-slate-50 transition border-b border-slate-100";
+                tr.innerHTML = `
+                    <td class="p-2.5 truncate max-w-xs" title="${escapeHtml(tm.keyword)}">${escapeHtml(tm.keyword)}</td>
+                    <td class="p-2.5 font-bold text-indigo-600">${escapeHtml(tm.alias)}</td>
+                    <td class="p-2.5 text-right"><button onclick="removeTeamMapping(${idx})" class="text-red-500 hover:text-red-700"><i data-lucide="trash-2" class="w-4 h-4"></i></button></td>
+                `;
+                teamTbody.appendChild(tr);
+            });
+
+            const ignTbody = document.getElementById('ignoredTitlesTableBody');
+            ignTbody.innerHTML = '';
+            ignoredTitles.forEach((title, idx) => {
+                const tr = document.createElement('tr');
+                tr.className = "hover:bg-slate-50 transition border-b border-slate-100";
+                tr.innerHTML = `
+                    <td class="p-2.5 font-medium text-slate-700">${escapeHtml(title)}</td>
+                    <td class="p-2.5 text-right"><button onclick="removeIgnoredTitle(${idx})" class="text-red-500 hover:text-red-700"><i data-lucide="trash-2" class="w-4 h-4"></i></button></td>
+                `;
+                ignTbody.appendChild(tr);
+            });
+
+            document.getElementById('configCountBadge').textContent = teamMappings.length + ignoredTitles.length;
+            safeIcons();
+        }
+
+        function addTeamMapping() {
+            const kw = document.getElementById('newTeamKeyword').value.trim();
+            const alias = document.getElementById('newTeamAlias').value.trim();
+            if (!kw || !alias) {
+                alert('กรุณากรอกข้อมูลให้ครบทั้ง Keyword และชื่อทีมย่อ');
+                return;
+            }
+            teamMappings.push({ keyword: kw, alias: alias });
+            saveStore('custom_team_mappings', teamMappings); 
+            reprocess();
+            document.getElementById('newTeamKeyword').value = '';
+            document.getElementById('newTeamAlias').value = '';
+            updateSettingsUI();
+            alert('เพิ่มข้อมูลทีมสำเร็จ');
+        }
+
+        function removeTeamMapping(index) {
+            if (confirm('คุณต้องการลบทีมนี้ใช่หรือไม่?')) {
+                teamMappings.splice(index, 1);
+                saveStore('custom_team_mappings', teamMappings); 
+                reprocess();
+                updateSettingsUI();
+            }
+        }
+
+        function addIgnoredTitle() {
+            const input = document.getElementById('newIgnoredTitleInput');
+            const val = input.value.trim();
+            if (!val) {
+                alert('กรุณากรอกข้อความ Title');
+                return;
+            }
+            if (ignoredTitles.includes(val)) {
+                alert('รายการนี้มีอยู่แล้ว');
+                return;
+            }
+            ignoredTitles.push(val);
+            saveStore('custom_ignored_titles', ignoredTitles); 
+            reprocess();
+            input.value = '';
+            updateSettingsUI();
+            alert('เพิ่ม Title สำเร็จ');
+        }
+
+        function removeIgnoredTitle(index) {
+            if (confirm('คุณต้องการลบ Title นี้ใช่หรือไม่?')) {
+                ignoredTitles.splice(index, 1);
+                saveStore('custom_ignored_titles', ignoredTitles); 
+                reprocess();
+                updateSettingsUI();
+            }
+        }
+
+        function resetSettingsToDefault() {
+            if (confirm('คุณต้องการรีเซ็ตข้อมูล Mapping ทีม และ Title ที่ละเว้น กลับเป็นค่าเริ่มต้นใช่หรือไม่?')) {
+                teamMappings = [...DEFAULT_TEAM_MAPPINGS];
+                ignoredTitles = [...DEFAULT_IGNORED_TITLES];
+                saveStore('custom_team_mappings', teamMappings);
+                saveStore('custom_ignored_titles', ignoredTitles);
+                reprocess();
+                updateSettingsUI();
+                alert('คืนค่าเริ่มต้นเรียบร้อยแล้ว');
+            }
+        }
+
+        function escapeHtml(text) {
+            if (!text) return "";
+            return String(text)
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;")
+                .replace(/"/g, "&quot;")
+                .replace(/'/g, "&#039;");
+        }
+
+        function exportToExcel() {
+            const dataset = getVisibleRows().filtered;
+
+            if (dataset.length === 0) {
+                alert('ไม่มีข้อมูลสำหรับส่งออก');
+                return;
+            }
+
+            const exportData = dataset.map((item) => ({
+                "Symtom": item.symtom,
+                "เลข non / TT": item.nonId,
+                "ชื่อช่าง": item.techName,
+                "SUP": item.sup,
+                "เวลา": item.timeRaw,
+                "ที่อยู่": item.address,
+                "เขต": item.district,
+                "SLOT": item.slot,
+                "งาน": item.translatedWork,
+                "ทีม": item.team,
+                "โซน": item.zone,
+                ...(activeCardFilter === 'filteredOut' ? { "เหตุผลที่คัดกรองออก": item.rejectReason } : {})
+            }));
+
+            const worksheet = XLSX.utils.json_to_sheet(exportData);
+            const workbook = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(workbook, worksheet, "ข้อมูล");
+            XLSX.writeFile(workbook, `ข้อมูลส่งออก_${activeCardFilter}.xlsx`);
+        }
+
+        function copyTableToClipboard() {
+            const dataset = getVisibleRows().filtered;
+            if (dataset.length === 0) return;
+            
+            const isFilteredOut = (activeCardFilter === 'filteredOut');
+            let tsv = "Symtom\tเลข non / TT\tชื่อช่าง\tSUP\tเวลา\tที่อยู่\tเขต\tSLOT\tงาน\tทีม\tโซน";
+            if (isFilteredOut) tsv += "\tเหตุผลที่คัดกรองออก";
+            tsv += "\n";
+
+            dataset.forEach(d => {
+                const c = v => String(v ?? '').replace(/[\t\r\n]+/g, ' ');
+                let cols = [d.symtom, d.nonId, d.techName, d.sup, d.timeRaw, d.address, d.district, d.slot, d.translatedWork, d.team, d.zone];
+                if (isFilteredOut) cols.push(d.rejectReason || '');
+                tsv += cols.map(c).join('\t') + '\n';
+            });
+
+            navigator.clipboard.writeText(tsv).then(() => {
+                alert('คัดลอกตารางไปยังคลิปบอร์ดแล้ว สามารถนำไปวางลงใน Excel ได้ทันที');
+            }).catch(() => alert('คัดลอกไม่สำเร็จ กรุณาใช้ปุ่มส่งออก Excel แทน'));
+        }
+
+        function clearData() {
+            document.getElementById('excelFile').value = '';
+            document.getElementById('fileNameDisplay').classList.add('hidden');
+            rawRows = [];
+            passedData = [];
+            filteredOutData = [];
+            activeCardFilter = 'passed';
+            currentSortColumn = null;
+            currentSortDirection = 'asc';
+            document.getElementById('searchInput').value = '';
+            document.getElementById('zoneFilter').value = '';
+            document.getElementById('resetFilterBtn').classList.add('hidden');
+            updateStats();
+            renderTableHeader();
+            document.getElementById('resultControls').classList.add('hidden');
+            document.getElementById('tableContainer').classList.add('hidden');
+        }
+    </script>
+</body>
+</html>
